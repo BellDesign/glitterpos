@@ -3,13 +3,13 @@
 import time
 import gc
 import math
-import adafruit_lsm9ds1
+# import adafruit_lsm9ds1
 import adafruit_gps
 import adafruit_rfm9x
 import board
 import busio
 import digitalio
-import neopixel
+# import neopixel
 import rtc
 from glitterpos_util import timestamp, compass_bearing, bearing_to_pixel, map_range
 
@@ -53,8 +53,13 @@ DEFAULT_BOX_COORDS = {
 }
 
 RADIO_FREQ_MHZ = 915.0
-CS = digitalio.DigitalInOut(board.D10)
-RESET = digitalio.DigitalInOut(board.D11)
+# CS = digitalio.DigitalInOut(board.D10)
+# RESET = digitalio.DigitalInOut(board.D11)
+# Feather M0 RFM9x
+CS = digitalio.DigitalInOut(board.D8)
+RESET = digitalio.DigitalInOut(board.D4)
+IRQ = digitalio.DigitalInOut(board.D3)
+
 
 class GlitterPOS:
     """glitter positioning system"""
@@ -78,33 +83,37 @@ class GlitterPOS:
         self.heading = 0.0
 
         # Status light on the board, we'll use to indicate GPS fix, etc.:
-        self.statuslight = neopixel.NeoPixel(board.NEOPIXEL, 1, brightness=0.005, auto_write=True)
-        self.statuslight.fill(RED)
+        # self.statuslight = neopixel.NeoPixel(board.NEOPIXEL, 1, brightness=0.005, auto_write=True)
+        # self.statuslight.fill(RED)
 
-        # Neopixel ring:
-        self.pixels = neopixel.NeoPixel(board.A1, 16, brightness=0.01, auto_write=False)
-        self.startup_animation()
+        self.statuslight = digitalio.DigitalInOut(board.D13)
+        self.statuslight.direction = digitalio.Direction.OUTPUT
+        self.statuslight.value = False
+
+        # # Neopixel ring:
+        # self.pixels = neopixel.NeoPixel(board.A1, 16, brightness=0.01, auto_write=False)
+        # self.startup_animation()
         time.sleep(2)
 
         self.init_radio()
         self.init_gps()
-        self.init_compass()
+        # self.init_compass() #Dont have a compass
 
-        self.statuslight.fill(YELLOW)
+        # self.statuslight.fill(YELLOW)
 
-    def startup_animation(self):
-        """Initialize NeoPixel test pattern."""
-        self.pixels[bearing_to_pixel(0)] = PURPLE
-        self.pixels.show()
-        time.sleep(.5)
-        self.pixels[bearing_to_pixel(90)] = GREEN
-        self.pixels.show()
-        time.sleep(.5)
-        self.pixels[bearing_to_pixel(180)] = YELLOW
-        self.pixels.show()
-        time.sleep(.5)
-        self.pixels[bearing_to_pixel(270)] = BLUE
-        self.pixels.show()
+    # def startup_animation(self):
+    #     """Initialize NeoPixel test pattern."""
+    #     self.pixels[bearing_to_pixel(0)] = PURPLE
+    #     self.pixels.show()
+    #     time.sleep(.5)
+    #     self.pixels[bearing_to_pixel(90)] = GREEN
+    #     self.pixels.show()
+    #     time.sleep(.5)
+    #     self.pixels[bearing_to_pixel(180)] = YELLOW
+    #     self.pixels.show()
+    #     time.sleep(.5)
+    #     self.pixels[bearing_to_pixel(270)] = BLUE
+    #     self.pixels.show()
 
     def init_radio(self):
         """Set up RFM95."""
@@ -128,11 +137,11 @@ class GlitterPOS:
 
         self.gps = gps
 
-    def init_compass(self):
-        """Set up LSM9DS1."""
-        i2c = busio.I2C(board.SCL, board.SDA)
-        self.compass = adafruit_lsm9ds1.LSM9DS1_I2C(i2c)
-        time.sleep(1)
+    # def init_compass(self):
+    #     """Set up LSM9DS1."""
+    #     i2c = busio.I2C(board.SCL, board.SDA)
+    #     self.compass = adafruit_lsm9ds1.LSM9DS1_I2C(i2c)
+    #     time.sleep(1)
 
     def advance_frame(self):
         """
@@ -149,12 +158,13 @@ class GlitterPOS:
         current = time.monotonic()
         self.radio_rx(timeout=0.5)
         new_gps_data = self.gps.update()
-        self.update_heading()
-        self.display_pixels()
+        # self.update_heading()
+        # self.display_pixels()
 
         if not self.gps.has_fix:
             # Try again if we don't have a fix yet.
-            self.statuslight.fill(RED)
+            self.statuslight.value = False
+            print("GPS no fix")
             return
 
         # We want to send coordinates out either on new GPS data or roughly
@@ -173,7 +183,7 @@ class GlitterPOS:
 
         self.coords = (self.gps.latitude, self.gps.longitude)
 
-        self.statuslight.fill(BLUE)
+        self.statuslight.value = True
         print(':: ' + str(current))  # Print a separator line.
         print(timestamp())
         send_packet = '{}:{}:{}:{}'.format(
@@ -189,24 +199,24 @@ class GlitterPOS:
         # Send a location packet:
         self.radio_tx('l', send_packet)
 
-    def update_heading(self):
-        mag_x, mag_y, mag_z = self.compass.magnetometer
-        # print('Magnetometer: ({0:10.3f}, {1:10.3f}, {2:10.3f})'.format(mag_x, mag_y, mag_z))
-        mag_x = map_range(mag_x, MAG_MIN[0], MAG_MAX[0], -1, 1)
-        mag_y = map_range(mag_y, MAG_MIN[1], MAG_MAX[1], -1, 1)
-        mag_z = map_range(mag_z, MAG_MIN[2], MAG_MAX[2], -1, 1)
+    # def update_heading(self):
+    #     mag_x, mag_y, mag_z = self.compass.magnetometer
+    #     # print('Magnetometer: ({0:10.3f}, {1:10.3f}, {2:10.3f})'.format(mag_x, mag_y, mag_z))
+    #     mag_x = map_range(mag_x, MAG_MIN[0], MAG_MAX[0], -1, 1)
+    #     mag_y = map_range(mag_y, MAG_MIN[1], MAG_MAX[1], -1, 1)
+    #     mag_z = map_range(mag_z, MAG_MIN[2], MAG_MAX[2], -1, 1)
 
-        heading_mag = (math.atan2(mag_y, mag_x) * 180) / math.pi
-        if heading_mag < 0:
-            heading_mag = 360 + heading_mag
+    #     heading_mag = (math.atan2(mag_y, mag_x) * 180) / math.pi
+    #     if heading_mag < 0:
+    #         heading_mag = 360 + heading_mag
 
-        # Account for declination (given in radians above):
-        heading = heading_mag + (DECLINATION_RAD * 180 / math.pi)
-        if heading > 360:
-            heading = heading - 360
+    #     # Account for declination (given in radians above):
+    #     heading = heading_mag + (DECLINATION_RAD * 180 / math.pi)
+    #     if heading > 360:
+    #         heading = heading - 360
 
-        print('heading: {}'.format(heading))
-        self.heading = heading
+    #     print('heading: {}'.format(heading))
+    #     self.heading = heading
 
     def radio_tx(self, msg_type, msg):
         """send a packet over radio with id prefix"""
@@ -248,29 +258,29 @@ class GlitterPOS:
         # packet_text = str(packet, 'ascii')
         # print('Received (ASCII): {0}'.format(packet_text))
 
-    def display_pixels(self):
-        """Display current state on the NeoPixel ring."""
-        self.pixels.fill((0, 0, 0))
+    # def display_pixels(self):
+    #     """Display current state on the NeoPixel ring."""
+    #     self.pixels.fill((0, 0, 0))
 
-        # We can't meaningfully point at other locations if we don't know our
-        # own position:
-        if not self.gps.has_fix:
-            return
+    #     # We can't meaningfully point at other locations if we don't know our
+    #     # own position:
+    #     if not self.gps.has_fix:
+    #         return
 
-        for box in self.glitterpos_boxes:
-            bearing_to_box = compass_bearing(self.coords, self.glitterpos_boxes[box])
+    #     for box in self.glitterpos_boxes:
+    #         bearing_to_box = compass_bearing(self.coords, self.glitterpos_boxes[box])
 
-            # Treat current compass heading as our origin point for display purposes:
-            display_bearing = bearing_to_box - self.heading
-            if display_bearing < 0:
-                display_bearing = display_bearing + 360
+    #         # Treat current compass heading as our origin point for display purposes:
+    #         display_bearing = bearing_to_box - self.heading
+    #         if display_bearing < 0:
+    #             display_bearing = display_bearing + 360
 
-            pixel = bearing_to_pixel(display_bearing)
-            # print('display pixel: {}'.format(pixel))
+    #         pixel = bearing_to_pixel(display_bearing)
+    #         # print('display pixel: {}'.format(pixel))
 
-            color = (15, 15, 15)
-            if box in COLOR_LOOKUP:
-                color = COLOR_LOOKUP[box]
-            self.pixels[pixel] = color
+    #         color = (15, 15, 15)
+    #         if box in COLOR_LOOKUP:
+    #             color = COLOR_LOOKUP[box]
+    #         self.pixels[pixel] = color
 
-        self.pixels.show()
+    #     self.pixels.show()
