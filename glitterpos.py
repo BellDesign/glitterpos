@@ -10,8 +10,8 @@ import board
 import busio
 import digitalio
 # import neopixel
-import rtc
-from glitterpos_util import timestamp, compass_bearing, bearing_to_pixel, map_range
+# import rtc
+from glitterpos_util import timestamp
 
 # glitterpos_cfg.py should be unique to each box, and formatted as follows:
 #
@@ -19,33 +19,10 @@ from glitterpos_util import timestamp, compass_bearing, bearing_to_pixel, map_ra
 # MAG_MIN = (-0.25046, -0.23506, -0.322)
 # MAG_MAX = (0.68278, 0.70882, 0.59654)
 # DECLINATION_RAD = 235.27 / 1000.0 # Black Rock City in radians
-#
+# #
 # From the CircuitPython REPL, use `import calibrate` to find values for
 # MAG_MIN and MAG_MAX.
 from glitterpos_cfg import MY_ID, MAG_MIN, MAG_MAX, DECLINATION_RAD
-
-# Colors for status lights, NeoPixel ring, etc.:
-RED = (255, 0, 0)
-YELLOW = (255, 150, 0)
-GREEN = (0, 255, 0)
-CYAN = (0, 255, 255)
-BLUE = (0, 0, 255)
-PURPLE = (180, 0, 255)
-
-# BOULDER_ID = 23
-
-# Color presets for each glitterpos_id:
-COLOR_LOOKUP = {
-    0: GREEN,
-    1: BLUE,
-    2: PURPLE,
-    3: YELLOW,
-    4: CYAN,
-    5: (100, 0, 255),
-    6: (0, 100, 200),
-    7: (100, 50, 100),
-    # BOULDER_ID: RED
-}
 
 # You can add fixed points here:
 DEFAULT_BOX_COORDS = {
@@ -56,9 +33,8 @@ RADIO_FREQ_MHZ = 915.0
 # CS = digitalio.DigitalInOut(board.D10)
 # RESET = digitalio.DigitalInOut(board.D11)
 # Feather M0 RFM9x
-CS = digitalio.DigitalInOut(board.D8)
-RESET = digitalio.DigitalInOut(board.D4)
-IRQ = digitalio.DigitalInOut(board.D3)
+CS = digitalio.DigitalInOut(board.RFM9X_CS)
+RESET = digitalio.DigitalInOut(board.RFM9X_RST)
 
 
 class GlitterPOS:
@@ -73,8 +49,8 @@ class GlitterPOS:
 
         # Set the RTC to an obviously bogus time for debugging purposes:
         # time_struct takes: (tm_year, tm_mon, tm_mday, tm_hour, tm_min, tm_sec, tm_wday, tm_yday, tm_isdst)
-        rtc.RTC().datetime = time.struct_time((2000, 1, 1, 0, 0, 0, 0, 0, 0))
-        print("startup time: " + timestamp())
+        # rtc.RTC().datetime = time.struct_time((2000, 1, 1, 0, 0, 0, 0, 0, 0))
+        # print("startup time: " + timestamp())
         self.time_set = False
         self.last_send = time.monotonic()
 
@@ -97,23 +73,7 @@ class GlitterPOS:
 
         self.init_radio()
         self.init_gps()
-        # self.init_compass() #Dont have a compass
 
-        # self.statuslight.fill(YELLOW)
-
-    # def startup_animation(self):
-    #     """Initialize NeoPixel test pattern."""
-    #     self.pixels[bearing_to_pixel(0)] = PURPLE
-    #     self.pixels.show()
-    #     time.sleep(.5)
-    #     self.pixels[bearing_to_pixel(90)] = GREEN
-    #     self.pixels.show()
-    #     time.sleep(.5)
-    #     self.pixels[bearing_to_pixel(180)] = YELLOW
-    #     self.pixels.show()
-    #     time.sleep(.5)
-    #     self.pixels[bearing_to_pixel(270)] = BLUE
-    #     self.pixels.show()
 
     def init_radio(self):
         """Set up RFM95."""
@@ -125,15 +85,15 @@ class GlitterPOS:
 
     def init_gps(self):
         """Set up GPS module."""
-        uart = busio.UART(board.TX, board.RX, baudrate=9600, timeout=3000)
+        uart = busio.UART(board.TX, board.RX, baudrate=9600, timeout=100)
         gps = adafruit_gps.GPS(uart)
         time.sleep(1)
 
         # https://cdn-shop.adafruit.com/datasheets/PMTK_A11.pdf
         # Turn on the basic GGA and RMC info (what you typically want), then
         # set update to once a second:
-        gps.send_command('PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0')
-        gps.send_command('PMTK220,1000')
+        gps.send_command(b'PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0')
+        gps.send_command(b'PMTK220,1000')
 
         self.gps = gps
 
@@ -174,7 +134,7 @@ class GlitterPOS:
 
         # Set the RTC to GPS time (UTC):
         if new_gps_data and not self.time_set:
-            rtc.RTC().datetime = self.gps.timestamp_utc
+            # rtc.RTC().datetime = self.gps.timestamp_utc
             self.time_set = True
 
         gps_coords = (self.gps.latitude, self.gps.longitude)
@@ -185,7 +145,7 @@ class GlitterPOS:
 
         self.statuslight.value = True
         print(':: ' + str(current))  # Print a separator line.
-        print(timestamp())
+        # print(timestamp())
         send_packet = '{}:{}:{}:{}'.format(
             self.gps.latitude,
             self.gps.longitude,
@@ -199,24 +159,6 @@ class GlitterPOS:
         # Send a location packet:
         self.radio_tx('l', send_packet)
 
-    # def update_heading(self):
-    #     mag_x, mag_y, mag_z = self.compass.magnetometer
-    #     # print('Magnetometer: ({0:10.3f}, {1:10.3f}, {2:10.3f})'.format(mag_x, mag_y, mag_z))
-    #     mag_x = map_range(mag_x, MAG_MIN[0], MAG_MAX[0], -1, 1)
-    #     mag_y = map_range(mag_y, MAG_MIN[1], MAG_MAX[1], -1, 1)
-    #     mag_z = map_range(mag_z, MAG_MIN[2], MAG_MAX[2], -1, 1)
-
-    #     heading_mag = (math.atan2(mag_y, mag_x) * 180) / math.pi
-    #     if heading_mag < 0:
-    #         heading_mag = 360 + heading_mag
-
-    #     # Account for declination (given in radians above):
-    #     heading = heading_mag + (DECLINATION_RAD * 180 / math.pi)
-    #     if heading > 360:
-    #         heading = heading - 360
-
-    #     print('heading: {}'.format(heading))
-    #     self.heading = heading
 
     def radio_tx(self, msg_type, msg):
         """send a packet over radio with id prefix"""
@@ -230,14 +172,14 @@ class GlitterPOS:
     def radio_rx(self, timeout=0.5):
         """check radio for new packets, handle incoming data"""
 
-        packet = self.rfm9x.receive(timeout)
+        packet = self.rfm9x.receive()
 
         # If no packet was received during the timeout then None is returned:
         if packet is None:
             return
 
         packet = bytes(packet)
-        print(timestamp())
+        # print(timestamp())
         print('   received signal strength: {0} dB'.format(self.rfm9x.rssi))
         print('   received (raw bytes): {0}'.format(packet))
         pieces = packet.split(b':')
@@ -257,30 +199,3 @@ class GlitterPOS:
 
         # packet_text = str(packet, 'ascii')
         # print('Received (ASCII): {0}'.format(packet_text))
-
-    # def display_pixels(self):
-    #     """Display current state on the NeoPixel ring."""
-    #     self.pixels.fill((0, 0, 0))
-
-    #     # We can't meaningfully point at other locations if we don't know our
-    #     # own position:
-    #     if not self.gps.has_fix:
-    #         return
-
-    #     for box in self.glitterpos_boxes:
-    #         bearing_to_box = compass_bearing(self.coords, self.glitterpos_boxes[box])
-
-    #         # Treat current compass heading as our origin point for display purposes:
-    #         display_bearing = bearing_to_box - self.heading
-    #         if display_bearing < 0:
-    #             display_bearing = display_bearing + 360
-
-    #         pixel = bearing_to_pixel(display_bearing)
-    #         # print('display pixel: {}'.format(pixel))
-
-    #         color = (15, 15, 15)
-    #         if box in COLOR_LOOKUP:
-    #             color = COLOR_LOOKUP[box]
-    #         self.pixels[pixel] = color
-
-    #     self.pixels.show()
